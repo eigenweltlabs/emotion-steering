@@ -18,7 +18,10 @@ import os
 import shutil
 import sys
 import tempfile
+from functools import wraps
 from pathlib import Path
+
+from fastapi import HTTPException, Request
 
 from ..vectors import VectorBundle
 
@@ -72,14 +75,10 @@ def _install_patches(bundle: VectorBundle) -> None:
 
 def _add_emotions_route(bundle: VectorBundle, api_key: str | None) -> None:
     """Patch vLLM's FastAPI app to expose GET /v1/emotions."""
-    from fastapi import HTTPException, Request
-
     try:
         from vllm.entrypoints.openai import api_server
     except ImportError as e:
         raise RuntimeError("vLLM OpenAI api_server not importable") from e
-
-    app = api_server.app
     bundle_meta = {
         k: v for k, v in bundle.metadata.items() if k != "auc_matrix"
     }
@@ -91,13 +90,41 @@ def _add_emotions_route(bundle: VectorBundle, api_key: str | None) -> None:
         "metadata": bundle_meta,
     }
 
-    @app.get("/v1/emotions")
-    async def list_emotions(request: Request):
-        if api_key is not None:
-            h = request.headers.get("authorization", "")
-            if not h.startswith("Bearer ") or h[len("Bearer "):] != api_key:
-                raise HTTPException(401, "missing or invalid Bearer token")
-        return response_payload
+    def attach_route(app):
+        if getattr(app.state, "_emotion_steering_route", False):
+            return app
+
+        @app.get("/v1/emotions")
+        async def list_emotions(request: Request):
+            if api_key is not None:
+                h = request.headers.get("authorization", "")
+                if not h.startswith("Bearer ") or h[len("Bearer "):] != api_key:
+                    raise HTTPException(401, "missing or invalid Bearer token")
+            return response_payload
+
+        app.state._emotion_steering_route = True
+        return app
+
+    # Older vLLM exposed a module-level FastAPI app. Newer vLLM builds the app
+    # inside build_app(), so wrap that builder and attach the route after vLLM
+    # registers its own OpenAI-compatible routers.
+    app = getattr(api_server, "app", None)
+    if app is not None:
+        attach_route(app)
+        return
+
+    build_app = getattr(api_server, "build_app", None)
+    if build_app is None:
+        raise RuntimeError("vLLM api_server exposes neither app nor build_app")
+    if getattr(build_app, "_emotion_steering_wrapped", False):
+        return
+
+    @wraps(build_app)
+    def wrapped_build_app(*args, **kwargs):
+        return attach_route(build_app(*args, **kwargs))
+
+    wrapped_build_app._emotion_steering_wrapped = True  # type: ignore[attr-defined]
+    api_server.build_app = wrapped_build_app
 
 
 def serve_vllm(
@@ -132,12 +159,25 @@ def serve_vllm(
         argv += ["--api-key", api_key]
 
     sys.argv = argv
-    from vllm.entrypoints.openai.api_server import cli_env_setup, parse_args
-
-    args = parse_args()
-    cli_env_setup() if hasattr(__import__("vllm.entrypoints.openai.api_server", fromlist=["cli_env_setup"]), "cli_env_setup") else None  # noqa
-    # Newer vLLM exposes `run_server`; older versions use `__main__` style.
     from vllm.entrypoints.openai import api_server as _api
+
+    if hasattr(_api, "parse_args"):
+        args = _api.parse_args()
+    else:
+        from vllm.utils.argparse_utils import FlexibleArgumentParser
+
+        parser = FlexibleArgumentParser(
+            description="vLLM OpenAI-Compatible RESTful API server."
+        )
+        parser = _api.make_arg_parser(parser)
+        args = parser.parse_args()
+        if hasattr(_api, "validate_parsed_serve_args"):
+            _api.validate_parsed_serve_args(args)
+
+    if hasattr(_api, "cli_env_setup"):
+        _api.cli_env_setup()
+
+    # Newer vLLM exposes `run_server`; older versions use `__main__` style.
     if hasattr(_api, "run_server"):
         import asyncio
         asyncio.run(_api.run_server(args))

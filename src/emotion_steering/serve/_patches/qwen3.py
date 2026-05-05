@@ -35,7 +35,8 @@ from vllm.transformers_utils.config import set_default_rope_theta
 from vllm.v1.attention.backend import AttentionType
 
 # STEERING: pull steering hooks
-from vllm._steering import get_steering_tensor, is_steering_layer
+from vllm._steering import get_steering_tensor, install as install_steering
+from vllm._steering import is_steering_layer
 
 from .interfaces import SupportsEagle, SupportsEagle3, SupportsLoRA, SupportsPP
 from .qwen2 import Qwen2MLP as Qwen3MLP
@@ -273,6 +274,10 @@ class Qwen3ForCausalLM(
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
         super().__init__()
+        # STEERING: importing vllm._steering from this module can happen while
+        # GPUModelRunner is still being imported. Retry here once model
+        # construction is underway; install_steering is idempotent.
+        install_steering()
         config = vllm_config.model_config.hf_config
         quant_config = vllm_config.quant_config
 
