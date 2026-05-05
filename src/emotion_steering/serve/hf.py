@@ -15,14 +15,10 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
-import numpy as np
 import torch
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from ..vectors import VectorBundle

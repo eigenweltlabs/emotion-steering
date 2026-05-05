@@ -55,14 +55,26 @@ def _install_patches(bundle: VectorBundle) -> None:
     vllm_dir = Path(vllm.__file__).parent
     patches_dir = Path(__file__).parent / "_patches"
 
-    # Install steering module
-    target_steering = vllm_dir / "_steering.py"
-    shutil.copy(patches_dir / "_steering.py", target_steering)
+    try:
+        # Install steering module
+        target_steering = vllm_dir / "_steering.py"
+        shutil.copy(patches_dir / "_steering.py", target_steering)
 
-    # Install patched qwen3 model
-    target_qwen3 = vllm_dir / "model_executor" / "models" / "qwen3.py"
-    if target_qwen3.exists():
+        # Install patched qwen3 model
+        target_qwen3 = vllm_dir / "model_executor" / "models" / "qwen3.py"
+        if not target_qwen3.exists():
+            raise RuntimeError(
+                f"Qwen3 model file not found at {target_qwen3}. "
+                "The vLLM fast path is pinned to vLLM 0.20.x; use --backend hf "
+                "or install emotion-steering[vllm] in a clean environment."
+            )
         shutil.copy(patches_dir / "qwen3.py", target_qwen3)
+    except OSError as exc:
+        raise RuntimeError(
+            f"Could not install emotion-steering patches into {vllm_dir}. "
+            "Use an isolated, writable virtualenv for the vLLM fast path, "
+            "or serve with --backend hf."
+        ) from exc
 
     # Force-reload so the GPUModelRunner wrapper installs in this process.
     import importlib

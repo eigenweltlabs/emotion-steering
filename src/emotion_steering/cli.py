@@ -1,8 +1,6 @@
 """emotion-steering CLI: extract, test, serve."""
 from __future__ import annotations
 
-import json
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -125,7 +123,6 @@ def extract(
     ),
 ):
     """Extract CAA emotion vectors and save AUC validation report."""
-    import numpy as np
     import torch
 
     from .dataset import EKMAN_MAP, load_goemotions_ekman, split_train_val
@@ -374,7 +371,6 @@ def test_http(
             body["chat_template_kwargs"] = {"enable_thinking": False}
         if spec is not None:
             body["vllm_xargs"] = {"steering": spec}
-            body["steering"] = spec  # also emotion-steering native field
         data = _json.dumps(body).encode()
         url = f"{base_url.rstrip('/')}/v1/chat/completions"
         req2 = urllib.request.Request(url, data=data, headers=headers, method="POST")

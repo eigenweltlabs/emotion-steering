@@ -23,10 +23,11 @@ CAA reference: Konen et al., *Steering Vectors for Causal Language Models* — v
 
 ```bash
 pip install -e .                  # core (HF backend works for any model)
-pip install -e .[vllm]            # add vLLM fast path (Qwen3 architecture)
+pip install -e .[vllm]            # add vLLM 0.20.x fast path (Qwen3 architecture)
 ```
 
 Requires Python 3.10+. Extraction needs a CUDA GPU. Serving HF needs a GPU; serving vLLM needs a GPU + the `vllm` extra.
+The vLLM fast path patches Qwen3 internals and is intentionally version-pinned to vLLM 0.20.x.
 
 ## CLI
 
@@ -87,7 +88,7 @@ The endpoint is OpenAI-compatible:
 emotion-steering test-http --base-url http://localhost:8000 --api-key $KEY
 ```
 
-Hits `/v1/emotions` for the ID map, then fires a baseline + one request per emotion in parallel and prints continuations. Same battery the production endpoint was validated with.
+Hits `/v1/emotions` for the ID map, then fires a baseline + one request per emotion in parallel and prints continuations.
 
 ## Steering API
 
@@ -114,13 +115,13 @@ For the HF compatibility backend, top-level `body.steering` is also accepted. Fo
 | Throughput @ L4 | ~50–80 tok/s solo | ~365 tok/s @ 32 concurrent |
 | Continuous batching | no (serialized) | **yes** |
 | Streaming | not yet | **yes** (vLLM-native) |
-| Setup | `pip install emotion-steering` | + `pip install emotion-steering[vllm]` |
+| Setup | `pip install emotion-steering` | + `pip install emotion-steering[vllm]` (vLLM 0.20.x) |
 
 To add a vLLM fast path for a new architecture, see `.claude/skills/extend-vllm-fast-path.md`.
 
 ## Bundled example
 
-`examples/qwen3-8b-ekman6/` ships with all six Ekman vectors at layers 20/21/22 for Qwen/Qwen3-8B. They're the validated production vectors used in our deployment. Drop-in:
+`examples/qwen3-8b-ekman6/` ships with all six Ekman vectors at layers 20/21/22 for Qwen/Qwen3-8B. These are the vectors used for our Qwen3-8B validation run. Drop-in:
 
 ```bash
 emotion-steering serve --vectors examples/qwen3-8b-ekman6 --model Qwen/Qwen3-8B
@@ -149,7 +150,7 @@ Recommended alphas (validated):
 
 vectors are added to the residual stream entering the layer *after* each chosen layer (i.e. `hidden_states += alpha · v` at the end of each chosen decoder block). Same convention as the capture step (`post_block_residual_stream`) so the vectors act in the space they were extracted from.
 
-vLLM fast path: a small monkey-patch wraps `GPUModelRunner.execute_model` to build a per-token tensor from each request's `SamplingParams.extra_args["steering"]` and stash it on the runner; the patched decoder layer reads it during forward.
+vLLM fast path: a small monkey-patch wraps `GPUModelRunner.execute_model` to build a per-token tensor from each request's `SamplingParams.extra_args["steering"]` and stash it on the runner; the patched decoder layer reads it during forward. The CLI installs that patch into the active vLLM package at serve startup, so use an isolated, writable virtualenv.
 
 HF slow path: a `forward` hook is installed for the duration of each request, then removed.
 

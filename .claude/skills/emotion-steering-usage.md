@@ -11,7 +11,7 @@ This package extracts CAA-style steering vectors and serves them on an OpenAI-co
 
 ```bash
 pip install -e .                  # core (HF backend works for any model)
-pip install -e .[vllm]            # add vLLM fast path (Qwen3 only out of the box)
+pip install -e .[vllm]            # add vLLM 0.20.x fast path (Qwen3 only out of the box)
 ```
 
 ## CLI
@@ -54,7 +54,7 @@ emotion-steering serve \
 
 The server exposes:
 
-- `POST /v1/chat/completions` — OpenAI-compatible. Accepts steering via either `body.steering = [id, alpha, ...]` or `body.vllm_xargs.steering`.
+- `POST /v1/chat/completions` — OpenAI-compatible. Send steering as `body.vllm_xargs.steering = [id, alpha, ...]`.
 - `GET /v1/emotions` — returns `{emotions, id_map, chosen_layers, model, metadata}`. Use this to discover IDs.
 - `GET /v1/models` — standard OpenAI list.
 - `GET /healthz` — liveness.
@@ -84,7 +84,7 @@ resp = client.chat.completions.create(
     messages=[{"role": "user", "content": "Tell me about your day."}],
     max_tokens=120,
     extra_body={
-        "steering": [emotions["joy"], 1.5],
+        "vllm_xargs": {"steering": [emotions["joy"], 1.5]},
         "chat_template_kwargs": {"enable_thinking": False},  # Qwen3-only
     },
 )
@@ -110,7 +110,7 @@ Negative alphas push *away* from the emotion. Stacking with high alphas (e.g. al
 
 ## Backend selection
 
-- `--backend vllm` — Qwen3 only (uses the bundled architecture-specific patch). ~365 tok/s on an L4 with continuous batching.
+- `--backend vllm` — Qwen3 only (uses the bundled architecture-specific vLLM 0.20.x patch). ~365 tok/s on an L4 with continuous batching.
 - `--backend hf` — works for any HF causal LM. Slow path (no continuous batching). Concurrent requests serialize.
 - `--backend auto` — picks vllm for Qwen3 if `vllm` is installed, else hf.
 

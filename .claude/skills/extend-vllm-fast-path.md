@@ -5,7 +5,7 @@ description: Add fast-path vLLM serving support for a new model architecture in 
 
 # How to add a new architecture to the vLLM fast path
 
-The vLLM fast path patches one model file in vLLM's tree to add a residual-stream addition at chosen decoder layers. The HF backend needs no patching, but lacks continuous batching. This guide walks through adding fast-path support for a new architecture.
+The vLLM fast path patches one model file in vLLM's tree to add a residual-stream addition at chosen decoder layers. The current package is pinned to vLLM 0.20.x because these files are copied into vLLM internals. The HF backend needs no patching, but lacks continuous batching. This guide walks through adding fast-path support for a new architecture.
 
 The pattern is: **clone vLLM's model file → add ~10 lines → register a Dockerfile**. About 30 minutes of work per arch.
 
@@ -134,7 +134,7 @@ Confirm `unique outputs: N+1/N+1` (one per emotion + baseline).
 
 ### 8. Validate at scale
 
-If continuous batching works, throughput with steering should match throughput without (within noise). Run the same burst test that's in `gcp-vllm-setup/test_steering_http.py` (32 concurrent baseline vs 32 concurrent steered) and look for < 5% delta.
+If continuous batching works, throughput with steering should match throughput without (within noise). Run a burst test with 32 concurrent baseline requests and 32 concurrent steered requests, then compare tokens per second and latency; look for < 5% delta.
 
 ## Common gotchas
 
@@ -142,7 +142,7 @@ If continuous batching works, throughput with steering should match throughput w
 - **`extra_args` on SamplingParams isn't propagating.** vLLM uses `vllm_xargs` in the OpenAI request body to populate `SamplingParams.extra_args`. If clients send `body.steering` instead and the runtime doesn't see it, route through `vllm_xargs`.
 - **The arch's decoder layer doesn't expose `prefix`.** `extract_layer_index` falls back gracefully (catches the exception), but the layer index will then be -1 and steering will silently no-op. Inspect `self.layer_idx` in the constructor to confirm.
 - **Hidden-size mismatch.** The bundle's `metadata.json["hidden"]` must equal `model.config.hidden_size`. The HF backend asserts this; vLLM does not. Build a fresh bundle for each model unless you're sure dims match.
-- **vLLM API drift.** vLLM moves fast — `GPUModelRunner` is in `vllm.v1.worker.gpu_model_runner` for v0.6+. If on a different vLLM version, the wrapper target may differ.
+- **vLLM API drift.** vLLM moves fast — this repo is pinned to vLLM 0.20.x. If you change that version, re-copy the upstream model file and re-check the `GPUModelRunner` wrapper target.
 
 ## Submitting back
 

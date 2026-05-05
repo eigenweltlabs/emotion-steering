@@ -101,6 +101,6 @@ def split_train_val(
         texts, labels, test_size=test_size, stratify=labels, random_state=seed,
     )
     return (
-        [LabeledRecord(text=t, label=l) for t, l in zip(tr_t, tr_l)],
-        [LabeledRecord(text=t, label=l) for t, l in zip(vl_t, vl_l)],
+        [LabeledRecord(text=text, label=label) for text, label in zip(tr_t, tr_l)],
+        [LabeledRecord(text=text, label=label) for text, label in zip(vl_t, vl_l)],
     )

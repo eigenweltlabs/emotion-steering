@@ -7,12 +7,11 @@ name = "emotion-steering"
 version = "0.1.0"
 description = "Extract and serve CAA-style emotion steering vectors for any HF causal LM."
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 requires-python = ">=3.10"
 authors = [{ name = "emotion-steering contributors" }]
 keywords = ["llm", "steering", "caa", "interpretability", "vllm", "transformers"]
 classifiers = [
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -34,7 +33,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-vllm = ["vllm>=0.6,<1.0"]
+vllm = ["vllm>=0.20,<0.21"]
 dev = [
     "pytest>=7",
     "pytest-asyncio>=0.21",
@@ -46,7 +45,7 @@ dev = [
 emotion-steering = "emotion_steering.cli:app"
 
 [project.urls]
-Repository = "https://github.com/johannmachemer/emotion-steering"
+Repository = "https://github.com/eigenweltlabs/emotion-steering"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -5,10 +5,8 @@ weights, then use FastAPI's TestClient to hit each endpoint.
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
