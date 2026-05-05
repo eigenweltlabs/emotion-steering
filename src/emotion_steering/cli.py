@@ -5,6 +5,7 @@ import json
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -17,6 +18,69 @@ app = typer.Typer(
     add_completion=False,
 )
 console = Console()
+
+
+def _exit_on_cache_permission(stage: str, exc: Exception) -> None:
+    """Turn common HF cache permission failures into an actionable CLI message."""
+    if not isinstance(exc, PermissionError) and "Permission denied" not in str(exc):
+        raise exc
+    console.print(f"[red]{stage} failed because a Hugging Face cache path is not writable.[/red]")
+    console.print(
+        "Set HF_HOME, HF_HUB_CACHE, or HF_DATASETS_CACHE to a writable directory, "
+        "for example: [bold]export HF_HOME=$HOME/.cache/huggingface[/bold]"
+    )
+    console.print(f"[dim]underlying error: {exc}[/dim]")
+    raise typer.Exit(1)
+
+
+def _metadata_count_summary(md: dict[str, Any]) -> str:
+    if "n_train" in md or "n_val" in md:
+        return f"{md.get('n_train', 'n/a')} / {md.get('n_val', 'n/a')}"
+
+    groups: list[str] = []
+    for key in sorted(md):
+        if not key.startswith("n_train_"):
+            continue
+        suffix = key.removeprefix("n_train_")
+        val_key = f"n_val_{suffix}"
+        groups.append(f"{suffix.replace('_', '/')}={md.get(key)} / {md.get(val_key, 'n/a')}")
+    return "; ".join(groups) if groups else "n/a"
+
+
+def _auc_tables(md: dict[str, Any], emotions: list[str]) -> list[tuple[str, list[str], Any]]:
+    if md.get("auc_matrix") is not None:
+        return [("Per-layer validation ROC-AUC (unitless)", emotions, md["auc_matrix"])]
+
+    out: list[tuple[str, list[str], Any]] = []
+    for key in sorted(md):
+        if key.startswith("auc_matrix_"):
+            cols = key.removeprefix("auc_matrix_").split("_")
+            out.append((f"Validation ROC-AUC (unitless): {'/'.join(cols)}", cols, md[key]))
+    return out
+
+
+def _chosen_auc_summary(md: dict[str, Any], tables: list[tuple[str, list[str], Any]]) -> str:
+    if md.get("mean_micro_auc_chosen") is not None:
+        return f"{float(md['mean_micro_auc_chosen']):.3f}"
+
+    search_layers = md.get("search_layers") or []
+    chosen_layers = md.get("chosen_layers") or []
+    if not search_layers or not chosen_layers or not tables:
+        return "n/a"
+
+    import numpy as np
+
+    row_idxs = [i for i, li in enumerate(search_layers) if li in set(chosen_layers)]
+    if not row_idxs:
+        return "n/a"
+
+    summaries: list[str] = []
+    for _, cols, matrix in tables:
+        arr = np.array(matrix, dtype=float)
+        if arr.ndim != 2 or not row_idxs:
+            continue
+        summaries.append(f"{'/'.join(cols)}={arr[row_idxs].mean():.3f}")
+    return "; ".join(summaries) if summaries else "n/a"
 
 
 @app.command()
@@ -35,7 +99,18 @@ def extract(
     ),
     search_layers: str | None = typer.Option(
         None, "--search-layers",
-        help="Comma-separated layer indices to sweep (default: middle ~30%% of model).",
+        help="Legacy explicit comma-separated layer indices to sweep.",
+    ),
+    layers: str | None = typer.Option(
+        None, "--layers", "-l",
+        help=(
+            "Layer selector: early, mid, late, all, integer ids, or comma-separated "
+            "mixes such as early,mid,late or 4,20,32."
+        ),
+    ),
+    layer: int | None = typer.Option(
+        None, "--layer",
+        help="Single zero-indexed decoder layer. Forces --window 1.",
     ),
     window: int = typer.Option(3, "--window", help="Size of contiguous chosen layer window."),
     batch_size: int = typer.Option(16, "--batch-size"),
@@ -56,7 +131,7 @@ def extract(
     from .dataset import EKMAN_MAP, load_goemotions_ekman, split_train_val
     from .extract import (
         CaptureConfig, build_vectors, capture_activations,
-        default_search_layers, load_model_for_extraction,
+        default_search_layers, load_model_for_extraction, parse_layer_selector,
     )
     from .probe import best_window, probe_all_layers
     from .vectors import save_bundle
@@ -76,19 +151,45 @@ def extract(
     console.rule(f"[bold]extract[/bold] model={model} emotions={targets}")
 
     console.print("[1/5] loading dataset (GoEmotions)...")
-    records = load_goemotions_ekman(targets, seed=seed)
+    try:
+        records = load_goemotions_ekman(targets, seed=seed)
+    except Exception as exc:
+        _exit_on_cache_permission("Dataset load", exc)
     train_recs, val_recs = split_train_val(records, test_size=test_size, seed=seed)
     console.print(f"  train={len(train_recs)} | val={len(val_recs)} | balanced per class")
 
     console.print(f"[2/5] loading model ({dtype}, device={device})...")
-    tokenizer, hf_model = load_model_for_extraction(model, dtype=torch_dtype, device=device)
+    try:
+        tokenizer, hf_model = load_model_for_extraction(model, dtype=torch_dtype, device=device)
+    except Exception as exc:
+        _exit_on_cache_permission("Model load", exc)
     num_layers = hf_model.config.num_hidden_layers
     hidden = hf_model.config.hidden_size
 
-    if search_layers:
-        sl = [int(x) for x in search_layers.split(",")]
+    selectors = [x is not None for x in (layer, layers, search_layers)]
+    if sum(selectors) > 1:
+        console.print("[red]use only one of --layer, --layers, or --search-layers[/red]")
+        raise typer.Exit(1)
+    if layer is not None:
+        sl = parse_layer_selector(str(layer), num_layers)
+        window = 1
+    elif layers:
+        try:
+            sl = parse_layer_selector(layers, num_layers)
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(1)
+    elif search_layers:
+        try:
+            sl = parse_layer_selector(search_layers, num_layers)
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(1)
     else:
         sl = default_search_layers(num_layers)
+    if window > len(sl):
+        console.print(f"[red]--window {window} is larger than selected layer count {len(sl)}[/red]")
+        raise typer.Exit(1)
     console.print(f"  layers={num_layers} hidden={hidden} search_layers={sl}")
 
     cfg = CaptureConfig(
@@ -121,19 +222,23 @@ def extract(
     )
     console.print(f"       probe wall: {time.time() - t0:.0f}s")
 
-    start_idx, mean_auc = best_window(auc, window=window)
+    try:
+        start_idx, mean_auc = best_window(auc, window=window, layer_ids=sl)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1)
     chosen_layer_idxs = [sl[start_idx + k] for k in range(window)]
     console.print(
         f"       best {window}-layer window: {chosen_layer_idxs} "
-        f"(mean micro-AUC = {mean_auc:.3f})"
+        f"(mean validation ROC-AUC = {mean_auc:.3f}, unitless)"
     )
 
-    # Print AUC table
-    tbl = Table(title="Per-layer AUC")
+    # Print AUC table.
+    tbl = Table(title="Per-layer validation ROC-AUC (unitless; 0.5 chance, 1.0 perfect)")
     tbl.add_column("layer", justify="right")
     for e in targets:
         tbl.add_column(e, justify="right")
-    tbl.add_column("micro", justify="right", style="bold")
+    tbl.add_column("mean", justify="right", style="bold")
     for li_idx, li in enumerate(sl):
         row = [str(li)]
         for ei in range(len(targets)):
@@ -186,29 +291,37 @@ def test(
     console.print(f"emotions:        {bundle.emotions}")
     console.print(f"chosen layers:   {bundle.chosen_layers}")
     console.print(f"hidden dim:      {md.get('hidden')}")
-    console.print(f"n_train / n_val: {md.get('n_train')} / {md.get('n_val')}")
-    console.print(f"mean AUC:        {md.get('mean_micro_auc_chosen', 'n/a')}")
+    console.print(f"n_train / n_val: {_metadata_count_summary(md)}")
 
-    auc = md.get("auc_matrix")
+    tables = _auc_tables(md, bundle.emotions)
+    console.print(
+        "mean chosen ROC-AUC: "
+        f"{_chosen_auc_summary(md, tables)} [dim](unitless; 0.5 chance, 1.0 perfect)[/dim]"
+    )
+
     sl = md.get("search_layers", [])
-    if auc and sl:
-        tbl = Table(title="Per-layer AUC")
+    for title, cols, auc in tables:
+        if not sl:
+            continue
+        tbl = Table(title=title)
         tbl.add_column("layer", justify="right")
-        for e in bundle.emotions:
+        for e in cols:
             tbl.add_column(e, justify="right")
-        tbl.add_column("micro", justify="right", style="bold")
+        tbl.add_column("mean", justify="right", style="bold")
         import numpy as np
         a = np.array(auc)
         for li_idx, li in enumerate(sl):
+            if li_idx >= len(a):
+                break
             row = [str(li)]
-            for ei in range(len(bundle.emotions)):
+            for ei in range(len(cols)):
                 row.append(f"{a[li_idx, ei]:.3f}")
             row.append(f"{a[li_idx].mean():.3f}")
             tbl.add_row(*row)
         console.print(tbl)
 
     if show_norms:
-        nt = Table(title="Norms at chosen layers")
+        nt = Table(title="L2 vector norms at chosen layers (hidden-state units)")
         nt.add_column("emotion")
         for li in bundle.chosen_layers:
             nt.add_column(f"L{li}", justify="right")

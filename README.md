@@ -41,6 +41,17 @@ emotion-steering extract \
 
 Defaults: GoEmotions auto-mapped to Ekman 6, balanced classes, search layers spanning the middle ~30% of the network, contiguous 3-layer chosen window picked by AUC.
 
+Layer selection:
+
+```bash
+emotion-steering extract --layers mid              # default middle band
+emotion-steering extract --layers early,mid,late   # named preset bands
+emotion-steering extract --layers 4,20,32 --window 1
+emotion-steering extract --layer 20                # single layer; window=1
+```
+
+`--layers` accepts `early`, `mid`, `late`, `all`, integer layer ids, or comma-separated mixes. `--search-layers` remains available as the legacy explicit CSV option.
+
 The output directory contains `<emotion>_chosen.npy`, `<emotion>_full_sweep.npy`, and `metadata.json` (model id, layers, AUC matrix, validation counts).
 
 ### Test (offline)
@@ -49,7 +60,7 @@ The output directory contains `<emotion>_chosen.npy`, `<emotion>_full_sweep.npy`
 emotion-steering test ./vectors
 ```
 
-Prints AUC by layer and per-emotion vector norms — sanity check before serving.
+Prints validation ROC-AUC by layer and per-emotion L2 vector norms. ROC-AUC is unitless (`0.5` chance, `1.0` perfect separation); norms are hidden-state vector magnitudes, not emotion intensity units.
 
 ### Serve
 
@@ -65,7 +76,7 @@ The endpoint is OpenAI-compatible:
 
 | route | purpose |
 |---|---|
-| `POST /v1/chat/completions` | OpenAI-style; accepts `body.steering` or `body.vllm_xargs.steering` |
+| `POST /v1/chat/completions` | OpenAI-style; vLLM path reads `body.vllm_xargs.steering`; HF path also accepts `body.steering` |
 | `GET /v1/emotions` | id ↔ name map + bundle metadata |
 | `GET /v1/models` | OpenAI list |
 | `GET /healthz` | liveness |
@@ -83,7 +94,9 @@ Hits `/v1/emotions` for the ID map, then fires a baseline + one request per emot
 Per-request, in the chat-completions body:
 
 ```json
-"steering": [emotion_id, alpha, emotion_id, alpha, ...]
+"vllm_xargs": {
+  "steering": [emotion_id, alpha, emotion_id, alpha, ...]
+}
 ```
 
 - IDs come from `GET /v1/emotions` → `id_map`.
@@ -91,7 +104,7 @@ Per-request, in the chat-completions body:
 - Stack multiple emotions: `[0, 1.0, 2, 0.5]` = 1.0×anger + 0.5×sadness.
 - Negative alphas push *away* from the emotion.
 
-For OpenAI SDK compatibility, also accepted at `body.extra_body.steering` and `body.vllm_xargs.steering`.
+For the HF compatibility backend, top-level `body.steering` is also accepted. For the vLLM fast path, use `body.vllm_xargs.steering` or pass it through the OpenAI SDK as an extra body field.
 
 ## Two backends
 

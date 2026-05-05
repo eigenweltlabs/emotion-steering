@@ -2,16 +2,36 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from emotion_steering.extract import build_vectors, default_search_layers
+from emotion_steering.extract import (
+    build_vectors, default_search_layers, layer_preset_layers, parse_layer_selector,
+)
 
 
 def test_default_search_layers_picks_middle_window():
     layers = default_search_layers(36)
     # Should land roughly in the 16-27 range (44% to 78% of depth)
-    assert layers[0] >= 14
+    assert layers[0] >= 15
     assert layers[-1] <= 28
     assert all(layers[i + 1] == layers[i] + 1 for i in range(len(layers) - 1))
+
+
+def test_layer_selector_accepts_presets_and_explicit_layers():
+    assert parse_layer_selector("4,20,32", 36) == [4, 20, 32]
+    assert parse_layer_selector("mid", 36) == default_search_layers(36)
+
+    early = layer_preset_layers(36, "early")
+    late = layer_preset_layers(36, "late")
+    assert early[0] < early[-1] < default_search_layers(36)[0]
+    assert late[0] > default_search_layers(36)[0]
+    assert late[-1] <= 35
+    assert parse_layer_selector("early,late", 36) == sorted(set(early + late))
+
+
+def test_layer_selector_rejects_out_of_range_layer():
+    with pytest.raises(ValueError, match="out of range"):
+        parse_layer_selector("36", 36)
 
 
 def test_build_vectors_matches_konen_formula():

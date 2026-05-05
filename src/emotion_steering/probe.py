@@ -74,11 +74,29 @@ def probe_all_layers(
     return auc
 
 
-def best_window(auc_matrix: np.ndarray, window: int = 3) -> tuple[int, float]:
-    """Return (start_index, mean_micro_auc) of the best contiguous layer window."""
+def best_window(
+    auc_matrix: np.ndarray,
+    window: int = 3,
+    layer_ids: list[int] | None = None,
+) -> tuple[int, float]:
+    """Return (start_index, mean_auc) of the best contiguous layer window."""
     micro = auc_matrix.mean(axis=1)
     if window > len(micro):
         raise ValueError(f"window={window} > n_layers={len(micro)}")
-    means = np.array([micro[i : i + window].mean() for i in range(len(micro) - window + 1)])
-    start = int(np.argmax(means))
-    return start, float(means[start])
+
+    candidates = list(range(len(micro) - window + 1))
+    if layer_ids is not None:
+        if len(layer_ids) != len(micro):
+            raise ValueError("layer_ids length must match auc_matrix rows")
+        candidates = [
+            i for i in candidates
+            if layer_ids[i : i + window] == list(range(layer_ids[i], layer_ids[i] + window))
+        ]
+        if not candidates:
+            raise ValueError(
+                f"no contiguous {window}-layer window exists in selected layers {layer_ids}"
+            )
+
+    means = np.array([micro[i : i + window].mean() for i in candidates])
+    best_pos = int(np.argmax(means))
+    return candidates[best_pos], float(means[best_pos])

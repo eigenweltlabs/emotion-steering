@@ -19,6 +19,12 @@ import torch
 from .dataset import LabeledRecord
 
 
+_LAYER_PRESET_SPANS: dict[str, tuple[float, float]] = {
+    "early": (0.10, 0.35),
+    "late": (0.72, 0.95),
+}
+
+
 @dataclass
 class CaptureConfig:
     search_layers: Sequence[int]
@@ -65,9 +71,62 @@ def find_decoder_layers(model) -> list:
 
 def default_search_layers(num_layers: int) -> list[int]:
     """Middle ~30% of the network: empirically the steering sweet spot."""
-    lo = int(num_layers * 0.44)
-    hi = int(num_layers * 0.78)
-    return list(range(lo, hi))
+    return _layer_span(num_layers, 0.44, 0.78)
+
+
+def layer_preset_layers(num_layers: int, preset: str) -> list[int]:
+    """Resolve a named layer preset into zero-indexed decoder layer ids.
+
+    `mid` is the default search band. `early` and `late` are broad enough to
+    search a small band, not just a single representative layer.
+    """
+    name = preset.strip().lower()
+    if name == "mid":
+        return default_search_layers(num_layers)
+    if name == "all":
+        return list(range(num_layers))
+    if name not in _LAYER_PRESET_SPANS:
+        known = ", ".join(["early", "mid", "late", "all"])
+        raise ValueError(f"unknown layer preset {preset!r}; expected one of: {known}")
+    lo, hi = _LAYER_PRESET_SPANS[name]
+    return _layer_span(num_layers, lo, hi)
+
+
+def parse_layer_selector(selector: str, num_layers: int) -> list[int]:
+    """Parse `early`, `mid`, `late`, `all`, integer ids, or comma-separated mixes."""
+    out: list[int] = []
+    for raw in selector.split(","):
+        token = raw.strip()
+        if not token:
+            continue
+        try:
+            layers = [int(token)]
+        except ValueError:
+            layers = layer_preset_layers(num_layers, token)
+        out.extend(layers)
+    return _validate_layer_indices(out, num_layers)
+
+
+def _layer_span(num_layers: int, start_frac: float, end_frac: float) -> list[int]:
+    if num_layers <= 0:
+        raise ValueError("num_layers must be positive")
+    start = round(num_layers * start_frac)
+    stop = round(num_layers * end_frac)
+    start = max(0, min(num_layers - 1, start))
+    stop = max(start + 1, min(num_layers, stop))
+    return list(range(start, stop))
+
+
+def _validate_layer_indices(layers: list[int], num_layers: int) -> list[int]:
+    if not layers:
+        raise ValueError("layer selector resolved to no layers")
+    bad = [li for li in layers if li < 0 or li >= num_layers]
+    if bad:
+        raise ValueError(
+            f"layer indices out of range for {num_layers} layers: {bad}; "
+            f"valid range is 0..{num_layers - 1}"
+        )
+    return sorted(dict.fromkeys(layers))
 
 
 def capture_activations(

@@ -17,9 +17,8 @@ Configurable via env vars:
 API (per request):
     SamplingParams.extra_args["steering"] = [emotion_id, alpha, ...]
 
-For OpenAI-compatible chat completions in vLLM, this comes from either
-`body.vllm_xargs.steering` (vLLM-native) or `body.steering` (also accepted
-when serving from this package).
+For OpenAI-compatible chat completions in vLLM, send this as
+`body.vllm_xargs.steering` or through the OpenAI SDK's extra body mechanism.
 """
 from __future__ import annotations
 

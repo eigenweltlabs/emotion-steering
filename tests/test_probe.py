@@ -22,6 +22,33 @@ def test_best_window_picks_argmax():
     assert mean == pytest.approx(0.9)
 
 
+def test_best_window_respects_layer_id_gaps():
+    auc = np.array([
+        [0.9, 0.9],
+        [0.9, 0.9],
+        [0.9, 0.9],
+        [0.6, 0.6],
+        [0.6, 0.6],
+        [0.6, 0.6],
+    ])
+
+    start, mean = best_window(auc, window=3, layer_ids=[4, 20, 21, 22, 32, 33])
+
+    assert start == 1
+    assert mean == pytest.approx(0.8)
+
+
+def test_best_window_rejects_missing_contiguous_window():
+    auc = np.array([
+        [0.9, 0.9],
+        [0.8, 0.8],
+        [0.7, 0.7],
+    ])
+
+    with pytest.raises(ValueError, match="no contiguous"):
+        best_window(auc, window=2, layer_ids=[4, 20, 32])
+
+
 def test_probe_one_separates_clearly_separable_data():
     """Linearly separable Gaussians should give AUC ~ 1.0."""
     if not torch.cuda.is_available():
