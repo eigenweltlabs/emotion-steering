@@ -17,7 +17,7 @@ Extract and serve **CAA-style emotion steering vectors** for any HuggingFace cau
                                           continuous batching       single-stream
 ```
 
-CAA reference: Konen et al., *Steering Vectors for Causal Language Models* — vector = `mean(class) − mean(rest of contrast set)` at a chosen residual-stream layer.
+CAA reference: Rimsky et al., *Steering Llama 2 via Contrastive Activation Addition*. This implementation uses the same basic contrastive direction idea: `mean(class) − mean(rest of contrast set)` at a chosen residual-stream layer.
 
 ## Install
 
@@ -161,7 +161,7 @@ emotion-steering/
 ├── src/emotion_steering/
 │   ├── cli.py             # extract / test / serve / test-http
 │   ├── dataset.py         # GoEmotions Ekman + custom mappings
-│   ├── extract.py         # capture + Konen Eq. 5
+│   ├── extract.py         # capture + contrastive mean-difference vectors
 │   ├── probe.py           # GPU-LBFGS LR probe
 │   ├── vectors.py         # bundle save/load
 │   └── serve/
@@ -181,6 +181,9 @@ Apache 2.0. The vLLM-derived files in `serve/_patches/` carry forward vLLM's Apa
 
 ## Citing & references
 
-- Konen, K. et al. *Steering Vectors for Causal Language Models*.
-- Demszky, D. et al. (2020). *GoEmotions: A Dataset of Fine-Grained Emotions*.
-- vLLM: <https://github.com/vllm-project/vllm>.
+- Rimsky, N. et al. (2024). [*Steering Llama 2 via Contrastive Activation Addition*](https://aclanthology.org/2024.acl-long.828/).
+- Konen, K. et al. (2024). [*Style Vectors for Steering Generative Large Language Models*](https://aclanthology.org/2024.eacl-long.52/).
+- Demszky, D. et al. (2020). [*GoEmotions: A Dataset of Fine-Grained Emotions*](https://aclanthology.org/2020.acl-main.372/).
+- Ekman, P. (1992). [*An Argument for Basic Emotions*](https://doi.org/10.1080/02699939208411068).
+- Qwen Team. [Qwen/Qwen3-8B model card](https://huggingface.co/Qwen/Qwen3-8B).
+- vLLM project. [vLLM GitHub repository](https://github.com/vllm-project/vllm). The vLLM-derived files in this repo retain their Apache-2.0 SPDX headers.
