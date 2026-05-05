@@ -1,0 +1,63 @@
+{
+  "model": "Qwen/Qwen3-8B",
+  "emotions": ["anger", "joy", "sadness", "disgust", "fear", "surprise"],
+  "num_layers": 36,
+  "hidden": 4096,
+  "search_layers": [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27],
+  "chosen_layers": [20, 21, 22],
+  "best_start_idx_in_search": 4,
+  "convention_capture": "last_token_post_block_residual_stream",
+  "convention_inject": "post_block_residual_stream",
+  "normalization": "none",
+  "seed": 42,
+  "extractor_version": "emotion-steering 0.1.0",
+  "contrast": "internal: vectors were extracted in two families (anger/joy/sadness and disgust/fear/surprise), each contrasted within its own family. AUCs across families are therefore not directly comparable.",
+  "auc_matrix_anger_joy_sadness": [
+    [0.7976, 0.8697, 0.8092],
+    [0.7961, 0.8731, 0.8057],
+    [0.8008, 0.8664, 0.8038],
+    [0.8016, 0.8747, 0.7960],
+    [0.7937, 0.8779, 0.8115],
+    [0.8004, 0.8740, 0.8138],
+    [0.8048, 0.8755, 0.8068],
+    [0.8029, 0.8753, 0.7924],
+    [0.8009, 0.8747, 0.7946],
+    [0.7965, 0.8673, 0.7978],
+    [0.7985, 0.8599, 0.8121],
+    [0.7981, 0.8655, 0.8156]
+  ],
+  "auc_matrix_disgust_fear_surprise": [
+    [0.848, 0.851, 0.903],
+    [0.849, 0.830, 0.899],
+    [0.843, 0.822, 0.893],
+    [0.837, 0.803, 0.897],
+    [0.842, 0.815, 0.896],
+    [0.826, 0.791, 0.907],
+    [0.844, 0.797, 0.893],
+    [0.847, 0.803, 0.908],
+    [0.849, 0.815, 0.901],
+    [0.848, 0.811, 0.900],
+    [0.849, 0.819, 0.892],
+    [0.854, 0.816, 0.896]
+  ],
+  "n_train_anger_joy_sadness": 7274,
+  "n_val_anger_joy_sadness": 1819,
+  "n_train_disgust_fear_surprise": 1591,
+  "n_val_disgust_fear_surprise": 398,
+  "validated_alpha_range": [-0.5, 2.0],
+  "alpha_recommendations": {
+    "anger": 1.5,
+    "joy": 1.5,
+    "sadness": 1.5,
+    "disgust": 1.0,
+    "fear": 1.5,
+    "surprise": 0.75
+  },
+  "notes": [
+    "anger, joy, sadness were extracted with ~3030 balanced samples per class.",
+    "disgust, fear, surprise were extracted with 663 balanced samples per class (capped by disgust which has only 1 GoEmotions sub-label).",
+    "Best contiguous 3-layer window for anger/joy/sadness: [20, 21, 22] (mean micro-AUC 0.847).",
+    "Best contiguous 3-layer window for disgust/fear/surprise: [16, 17, 18] (mean micro-AUC 0.860). Vectors saved here at [20, 21, 22] for endpoint compatibility — slightly off-optimum (mean micro-AUC 0.846).",
+    "Surprise has the largest norms; α >= 1.5 produces degenerate output. Drop to ~0.75 for clean effect."
+  ]
+}
