@@ -36,7 +36,7 @@ from vllm.v1.attention.backend import AttentionType
 
 # STEERING: pull steering hooks
 from vllm._steering import get_steering_tensor, install as install_steering
-from vllm._steering import is_steering_layer
+from vllm._steering import is_steering_layer, record_projections
 
 from .interfaces import SupportsEagle, SupportsEagle3, SupportsLoRA, SupportsPP
 from .qwen2 import Qwen2MLP as Qwen3MLP
@@ -220,14 +220,26 @@ class Qwen3DecoderLayer(nn.Module):
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
         hidden_states = self.mlp(hidden_states)
 
-        # STEERING: at each chosen layer, add the per-token steering tensor to
-        # hidden_states. It gets fused into `residual` at the next layer's
+        # STEERING: at each chosen layer, add the per-token steering tensor,
+        # THEN project the post-steering hidden states onto each emotion
+        # vector. The addition gets fused into `residual` at the next layer's
         # input_layernorm — matches CAA's "post_block_residual_stream"
         # injection convention.
+        #
+        # Why post-steering for the projection: the visualization is meant to
+        # show "how aligned each token's residual stream is with the chosen
+        # emotion direction at the projection point." Pre-steering projection
+        # measures the model's natural alignment, which leads to the
+        # counter-intuitive case where a baseline run looks MORE colored than
+        # a steered run (the steering is doing the work externally, the
+        # natural representation hasn't shifted). Post-steering captures both
+        # the natural alignment AND the injected vector, so the steered
+        # column visibly tracks the steering effect.
         if is_steering_layer(self.layer_idx):
             steering = get_steering_tensor(self.layer_idx)
             if steering is not None and steering.shape == hidden_states.shape:
                 hidden_states = hidden_states + steering.to(hidden_states.dtype)
+            record_projections(self.layer_idx, hidden_states)
 
         return hidden_states, residual
 

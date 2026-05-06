@@ -29,10 +29,13 @@ COPY qwen3.py     /usr/local/lib/python3.12/dist-packages/vllm/model_executor/mo
 COPY vectors/ /opt/vllm-vectors/
 
 # Hook so the monkey-patches install in any vLLM-importing process,
-# including the engine subprocess.
+# including the engine subprocess. The activations-route install runs only
+# in the API server process (where api_server can be imported); the engine
+# subprocess swallows the ImportError silently.
 RUN echo "" >> /usr/local/lib/python3.12/dist-packages/vllm/__init__.py \
  && echo "# emotion-steering: steering extension" >> /usr/local/lib/python3.12/dist-packages/vllm/__init__.py \
  && echo "try:" >> /usr/local/lib/python3.12/dist-packages/vllm/__init__.py \
  && echo "    from vllm import _steering as _steering  # noqa: F401" >> /usr/local/lib/python3.12/dist-packages/vllm/__init__.py \
+ && echo "    _steering._install_activations_route()" >> /usr/local/lib/python3.12/dist-packages/vllm/__init__.py \
  && echo "except Exception as _e:" >> /usr/local/lib/python3.12/dist-packages/vllm/__init__.py \
  && echo "    import logging as _l; _l.getLogger('vllm').exception('steering init failed: %s', _e)" >> /usr/local/lib/python3.12/dist-packages/vllm/__init__.py
