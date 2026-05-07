@@ -61,7 +61,7 @@ You may need to add `from .utils import extract_layer_index` if the file doesn't
 ```python
 # STEERING: at each chosen layer, add the per-token steering tensor to
 # hidden_states so it gets fused into `residual` at the next layer's
-# input_layernorm. Matches CAA's "post_block_residual_stream" injection.
+# input_layernorm. Matches the post-block residual-stream injection site.
 if is_steering_layer(self.layer_idx):
     steering = get_steering_tensor(self.layer_idx)
     if steering is not None and steering.shape == hidden_states.shape:

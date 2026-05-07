@@ -11,7 +11,7 @@ from rich.table import Table
 
 app = typer.Typer(
     name="emotion-steering",
-    help="Extract and serve CAA-style emotion steering vectors for any HF causal LM.",
+    help="Extract and serve activation-based emotion steering vectors (Konen et al. 2024) for any HF causal LM.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -122,7 +122,7 @@ def extract(
         help="Also save vectors for every searched layer, not just the chosen window.",
     ),
 ):
-    """Extract CAA emotion vectors and save AUC validation report."""
+    """Extract activation-based emotion vectors (Konen Eq. 5) and save AUC validation report."""
     import torch
 
     from .dataset import EKMAN_MAP, load_goemotions_ekman, split_train_val

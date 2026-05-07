@@ -223,8 +223,8 @@ class Qwen3DecoderLayer(nn.Module):
         # STEERING: at each chosen layer, add the per-token steering tensor,
         # THEN project the post-steering hidden states onto each emotion
         # vector. The addition gets fused into `residual` at the next layer's
-        # input_layernorm — matches CAA's "post_block_residual_stream"
-        # injection convention.
+        # input_layernorm — matches the post-block residual-stream injection
+        # site used during extraction.
         #
         # Why post-steering for the projection: the visualization is meant to
         # show "how aligned each token's residual stream is with the chosen

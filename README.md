@@ -1,6 +1,6 @@
 # emotion-steering
 
-Extract and serve **CAA-style emotion steering vectors** for any HuggingFace causal LM, with a fast vLLM path for Qwen3.
+Extract and serve **activation-based emotion steering vectors** for any HuggingFace causal LM, with a fast vLLM path for Qwen3.
 
 ```
             ┌────────────┐                          ┌────────────────────┐
@@ -17,7 +17,7 @@ Extract and serve **CAA-style emotion steering vectors** for any HuggingFace cau
                                           continuous batching       single-stream
 ```
 
-CAA reference: Rimsky et al., *Steering Llama 2 via Contrastive Activation Addition*. This implementation uses the same basic contrastive direction idea: `mean(class) − mean(rest of contrast set)` at a chosen residual-stream layer.
+Method: Konen et al. (2024), *Style Vectors for Steering Generative Large Language Models* (Eq. 5) — `mean(class) − mean(rest of contrast set)` at a chosen residual-stream layer. Related: Rimsky et al. (2024), *Steering Llama 2 via Contrastive Activation Addition* — same contrastive-activation family, with paired A/B answer-token contrasts rather than class-mean differences.
 
 ## Install
 
