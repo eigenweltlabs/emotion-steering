@@ -1,11 +1,11 @@
 ---
 name: emotion-steering-usage
-description: Use the emotion-steering CLI to extract CAA-style emotion vectors from a HuggingFace causal LM and serve them on an OpenAI-compatible endpoint with per-request steering. Trigger when the user asks to extract emotion (or any contrastive) directions, run/serve the vector endpoint, query /v1/emotions, or test extracted vectors.
+description: Use the emotion-steering CLI to extract activation-based emotion vectors (Konen et al. 2024) from a HuggingFace causal LM and serve them on an OpenAI-compatible endpoint with per-request steering. Trigger when the user asks to extract emotion (or any contrastive) directions, run/serve the vector endpoint, query /v1/emotions, or test extracted vectors.
 ---
 
 # emotion-steering — quick-start for agents
 
-This package extracts CAA-style steering vectors and serves them on an OpenAI-compatible endpoint. Vectors are injected at the residual stream of chosen decoder layers; one alpha per request, per emotion.
+This package extracts activation-based steering vectors (Konen et al. 2024, Eq. 5) and serves them on an OpenAI-compatible endpoint. Vectors are injected at the residual stream of chosen decoder layers; one alpha per request, per emotion.
 
 ## Install
 

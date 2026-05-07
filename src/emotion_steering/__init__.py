@@ -1,4 +1,4 @@
-"""emotion-steering: extract and serve CAA-style emotion steering vectors."""
+"""emotion-steering: extract and serve activation-based emotion steering vectors (Konen et al. 2024)."""
 
 __version__ = "0.1.0"
 

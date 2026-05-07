@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "emotion-steering"
 version = "0.1.0"
-description = "Extract and serve CAA-style emotion steering vectors for any HF causal LM."
+description = "Extract and serve activation-based emotion steering vectors (Konen et al. 2024) for any HF causal LM."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"

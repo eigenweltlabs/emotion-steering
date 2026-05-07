@@ -1,4 +1,4 @@
-"""Extract CAA-style emotion vectors from any HuggingFace causal LM.
+"""Extract activation-based emotion vectors from any HuggingFace causal LM.
 
 Pipeline (Konen et al. style):
 1. Load a contrastive labeled dataset (default: GoEmotions -> Ekman).
