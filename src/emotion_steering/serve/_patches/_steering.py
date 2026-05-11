@@ -339,21 +339,41 @@ def _build_req_ranges(runner, scheduler_output):
     return ranges if ranges else None
 
 
+def _collect_sampling_params(runner, scheduler_output, ranges):
+    """Return {req_id: SamplingParams} for every rid in `ranges`.
+
+    Reads from both runner.requests (decode requests already registered from
+    prior steps) AND scheduler_output.scheduled_new_reqs (prefill requests
+    not yet registered). vLLM v1 registers new requests in runner.requests
+    inside execute_model — after our wrapper's pre-hook runs — so a lookup
+    in runner.requests alone misses them on the very first forward of a new
+    request, causing the prompt to enter the KV cache unsteered.
+    """
+    sp_by_rid: dict = {}
+    rstates = getattr(runner, "requests", {}) or {}
+    for rid, _, _ in ranges:
+        rs = rstates.get(rid)
+        if rs is not None and getattr(rs, "sampling_params", None) is not None:
+            sp_by_rid[rid] = rs.sampling_params
+    for nr in (getattr(scheduler_output, "scheduled_new_reqs", None) or []):
+        rid = getattr(nr, "req_id", None) or getattr(nr, "request_id", None)
+        if rid and rid not in sp_by_rid:
+            sp = getattr(nr, "sampling_params", None)
+            if sp is not None:
+                sp_by_rid[rid] = sp
+    return sp_by_rid
+
+
 def _build_per_layer_tensors(runner, scheduler_output, ranges):
     """Build {layer_idx: [total_num_scheduled_tokens, HIDDEN_DIM]} or None."""
     if not ranges:
         return None
 
-    rstates = runner.requests
-    any_steering = False
-    for rid, _, _ in ranges:
-        rs = rstates.get(rid)
-        if rs is None:
-            continue
-        sp = rs.sampling_params
-        if sp is not None and sp.extra_args and sp.extra_args.get("steering"):
-            any_steering = True
-            break
+    sp_by_rid = _collect_sampling_params(runner, scheduler_output, ranges)
+    any_steering = any(
+        sp.extra_args and sp.extra_args.get("steering")
+        for sp in sp_by_rid.values()
+    )
     if not any_steering:
         return None
 
@@ -368,10 +388,10 @@ def _build_per_layer_tensors(runner, scheduler_output, ranges):
     }
 
     for rid, cursor, n_tok in ranges:
-        rs = rstates.get(rid)
-        if rs is None or rs.sampling_params is None:
+        sp = sp_by_rid.get(rid)
+        if sp is None:
             continue
-        spec = (rs.sampling_params.extra_args or {}).get("steering")
+        spec = (sp.extra_args or {}).get("steering")
         pairs = _parse_pairs(spec)
         if not pairs:
             continue
