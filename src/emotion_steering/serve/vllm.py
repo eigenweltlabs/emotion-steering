@@ -69,6 +69,16 @@ def _install_patches(bundle: VectorBundle) -> None:
                 "or install emotion-steering[vllm] in a clean environment."
             )
         shutil.copy(patches_dir / "qwen3.py", target_qwen3)
+
+        # Install patched gemma3 model (covers google/gemma-3-*-it)
+        target_gemma3 = vllm_dir / "model_executor" / "models" / "gemma3.py"
+        if target_gemma3.exists():
+            shutil.copy(patches_dir / "gemma3.py", target_gemma3)
+
+        # Install patched mistral model (covers mistralai/Mistral-7B-*)
+        target_mistral = vllm_dir / "model_executor" / "models" / "mistral.py"
+        if target_mistral.exists():
+            shutil.copy(patches_dir / "mistral.py", target_mistral)
     except OSError as exc:
         raise RuntimeError(
             f"Could not install emotion-steering patches into {vllm_dir}. "
@@ -164,6 +174,7 @@ def serve_vllm(
         "--gpu-memory-utilization", str(gpu_memory_utilization),
         "--max-num-seqs", str(max_num_seqs),
         "--enforce-eager",
+        "--no-enable-prefix-caching",
         "--host", host,
         "--port", str(port),
     ]

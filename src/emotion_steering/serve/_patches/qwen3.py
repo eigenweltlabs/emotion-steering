@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+import os
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
 # This is the upstream vllm 0.20.0 qwen3.py with two surgical edits, marked
@@ -238,7 +239,18 @@ class Qwen3DecoderLayer(nn.Module):
         if is_steering_layer(self.layer_idx):
             steering = get_steering_tensor(self.layer_idx)
             if steering is not None and steering.shape == hidden_states.shape:
-                hidden_states = hidden_states + steering.to(hidden_states.dtype)
+                if os.environ.get("STEERING_DEBUG"):
+                    import sys
+                    print(
+                        f"[STEER] layer={self.layer_idx} "
+                        f"hs.shape={tuple(hidden_states.shape)} hs.dtype={hidden_states.dtype} "
+                        f"resid.shape={tuple(residual.shape)} "
+                        f"resid.norm={float(residual.float().norm()):.2f} "
+                        f"steer.norm={float(steering.float().norm()):.2f} "
+                        f"steer.dtype={steering.dtype}",
+                        flush=True, file=sys.stderr,
+                    )
+                residual = residual + steering.to(residual.dtype)
             record_projections(self.layer_idx, hidden_states)
 
         return hidden_states, residual
