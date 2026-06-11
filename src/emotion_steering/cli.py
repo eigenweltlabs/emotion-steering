@@ -447,9 +447,9 @@ def _resolve_backend(backend: str, bundle_model: str, serve_model: str) -> str:
         return "vllm"
     if backend != "auto":
         raise typer.BadParameter(f"backend must be auto|hf|vllm, got {backend!r}")
-    # auto: vLLM only for Qwen3 (the architecture the bundled patch supports)
+    # auto: vLLM for archs the bundled patches support (Qwen3, Gemma3)
     needle = serve_model.lower()
-    if "qwen3" in needle or "qwen-3" in needle:
+    if any(k in needle for k in ("qwen3", "qwen-3", "gemma-3", "gemma3", "mistral")):
         try:
             import vllm  # noqa: F401
         except ImportError:

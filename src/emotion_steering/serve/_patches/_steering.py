@@ -438,6 +438,16 @@ def _wrap_execute_model():
             tensors = _build_per_layer_tensors(self, scheduler_output, ranges)
         except Exception as e:
             log.exception("steering build failed: %s", e)
+        if os.environ.get("STEERING_DEBUG"):
+            import sys
+            tot = getattr(scheduler_output, "total_num_scheduled_tokens", "?")
+            sched = getattr(scheduler_output, "num_scheduled_tokens", None)
+            print(
+                f"[STEER-EM] total_sched={tot} per_req={dict(sched) if sched else sched} "
+                f"ranges={ranges} tensors_built={(tensors is not None)} "
+                f"tensor_shape={tuple(next(iter(tensors.values())).shape) if tensors else None}",
+                flush=True, file=sys.stderr,
+            )
         setattr(self, _RUNNER_TENSORS_ATTR, tensors)
         setattr(self, _RUNNER_RANGES_ATTR, ranges)
         prev = _CURRENT_RUNNER
